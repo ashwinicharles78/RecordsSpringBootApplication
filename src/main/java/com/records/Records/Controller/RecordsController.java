@@ -1,12 +1,11 @@
 package com.records.Records.Controller;
 
+
 import com.records.Records.Entity.Mykey;
 import com.records.Records.Entity.Records;
-import com.records.Records.Utility.RecordDTO;
 import com.records.Records.Repository.RecordsRepository;
-import com.records.Records.Utility.RecordsDTO;
 import com.records.Records.service.RecordsService;
-import org.modelmapper.ModelMapper;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;

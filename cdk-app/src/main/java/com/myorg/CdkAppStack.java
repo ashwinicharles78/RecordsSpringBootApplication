@@ -2,6 +2,7 @@ package com.myorg;
 
 import software.amazon.awscdk.services.ec2.*;
 import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedEc2Service;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
 import util.Tuple;
@@ -36,9 +37,9 @@ public class CdkAppStack extends Stack {
 
         Vpc vpc = getVpc("Records");
         Tuple<DatabaseInstance, SecurityGroup> databaseAndEcsSecurityGroup = getDatabaseInstanceAndEcsSecurityGroup(vpc);
-        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
-
-        new CfnOutput(this, "ALB DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedFargateService.getLoadBalancer().getLoadBalancerDnsName()).build());
+//        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
+        ApplicationLoadBalancedEc2Service applicationLoadBalancedEc2Service = getEc2(vpc, databaseAndEcsSecurityGroup);
+        new CfnOutput(this, "Records app DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedEc2Service.getLoadBalancer().getLoadBalancerDnsName()).build());
 
 
 
@@ -79,14 +80,14 @@ public class CdkAppStack extends Stack {
                 .vpc(vpc)
                 .description("ECS Security Group")
                 .build());
-        ecsSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(3036), "Egress rule to DB port");
+        ecsSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(3306), "Egress rule to DB port");
 
         final SecurityGroup databaseSecurityGroup =  new SecurityGroup(this, "Records" + "-database-security-group", SecurityGroupProps.builder()
                 .vpc(vpc)
                 .description("Database Security Group")
                 .build());
 
-        databaseSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(3036), "Ingress rule to DB port");
+        databaseSecurityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(3306), "Ingress rule to DB port");
 
 
         final IInstanceEngine instanceEngine = DatabaseInstanceEngine.mysql(
@@ -123,8 +124,8 @@ public class CdkAppStack extends Stack {
 
         // Create a load-balanced Fargate service and make it public
         var albfs = ApplicationLoadBalancedFargateService.Builder.create(this, "Records" + "-ecs-service")
-                .cluster(cluster)           // Required
-                .cpu(256)                   // Default is 256
+                .cluster(cluster)
+                .cpu(256)
                 .desiredCount(1)
                 .taskImageOptions(
                         ApplicationLoadBalancedTaskImageOptions.builder()
@@ -137,9 +138,9 @@ public class CdkAppStack extends Stack {
                                 ))
                                 .build())
 
-                .memoryLimitMiB(512)       // Default is 512
-                .publicLoadBalancer(true)   // Default is true
-                .assignPublicIp(true)
+                .memoryLimitMiB(512)
+                .publicLoadBalancer(true)
+                .assignPublicIp(true)   // Need to clear doubt in this
                 .securityGroups(Collections.singletonList(databaseAndEcsSecurityGroup.getVar2()))
                 .build();
 
@@ -150,5 +151,44 @@ public class CdkAppStack extends Stack {
                 .build());
 
         return albfs;
+    }
+
+    private ApplicationLoadBalancedEc2Service getEc2(Vpc vpc, Tuple<DatabaseInstance, SecurityGroup> databaseAndEcsSecurityGroup) {
+        String datasourceUrl = "jdbc:mysql://" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointAddress() + ":" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointPort() + "/" + "test";
+        Cluster cluster = Cluster.Builder.create(this, "Records" + "-ecs-cluster")
+                .capacity(AddCapacityOptions.builder()
+                        .instanceType(InstanceType.of(InstanceClass.T2, InstanceSize.MICRO))
+                        .allowAllOutbound(true)
+                        .desiredCapacity(2)
+                        .machineImageType(MachineImageType.AMAZON_LINUX_2)
+                        .build())
+                .vpc(vpc)
+                .build();
+
+        ApplicationLoadBalancedEc2Service albes = ApplicationLoadBalancedEc2Service.Builder.create(this, "Service")
+                .cluster(cluster)
+                .cpu(256)
+                .memoryLimitMiB(512)
+                .taskImageOptions(ApplicationLoadBalancedTaskImageOptions.builder()
+                        .image(ContainerImage.fromRegistry("public.ecr.aws/m1j0e2f8/records-appliaction-for-testing"))
+                        .containerPort(8080)
+                        .environment(Map.of(
+                                "SPRING_DATASOURCE_URL", datasourceUrl,
+                                "SPRING_DATASOURCE_USERNAME", "ashwini",
+                                "SPRING_DATASOURCE_PASSWORD", "ashwini_pw"
+                        ))
+                        .build())
+                .desiredCount(2)
+                .publicLoadBalancer(true)
+                .build();
+
+        albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
+                .path("/records")
+                .port(String.valueOf(8080))
+                .healthyHttpCodes("200")
+                .build());
+
+        return albes;
+
     }
 }

@@ -27,7 +27,7 @@ public class CdkAppApp {
                 // Uncomment the next block if you know exactly what Account and Region you
                 // want to deploy the stack to.
                 .env(Environment.builder()
-                        .account("654654602872")
+                        //.account("account id here")
                         .region("us-east-1")
                         .build())
 

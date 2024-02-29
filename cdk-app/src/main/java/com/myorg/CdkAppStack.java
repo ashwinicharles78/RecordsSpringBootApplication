@@ -37,9 +37,9 @@ public class CdkAppStack extends Stack {
 
         Vpc vpc = getVpc("Records");
         Tuple<DatabaseInstance, SecurityGroup> databaseAndEcsSecurityGroup = getDatabaseInstanceAndEcsSecurityGroup(vpc);
-//        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
-        ApplicationLoadBalancedEc2Service applicationLoadBalancedEc2Service = getEc2(vpc, databaseAndEcsSecurityGroup);
-        new CfnOutput(this, "Records app DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedEc2Service.getLoadBalancer().getLoadBalancerDnsName()).build());
+        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
+//        ApplicationLoadBalancedEc2Service applicationLoadBalancedEc2Service = getEc2(vpc, databaseAndEcsSecurityGroup);
+        new CfnOutput(this, "Records app DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedFargateService.getLoadBalancer().getLoadBalancerDnsName()).build());
 
 
 
@@ -67,8 +67,12 @@ public class CdkAppStack extends Stack {
                                 .name("Public")
                                 .subnetType(SubnetType.PUBLIC)
                                 .cidrMask(24)
-                                .build()
-                        ))
+                                .build(),
+                        SubnetConfiguration.builder()
+                                .name("Isolated")
+                                .subnetType(SubnetType.PRIVATE_ISOLATED)
+                                .cidrMask(24)
+                                .build()))
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
                 .build();
 //        return Vpc.fromLookup(this, "DefaultVPC", VpcLookupOptions.builder().isDefault(true).build());
@@ -100,7 +104,7 @@ public class CdkAppStack extends Stack {
                 .vpc(vpc)
                 .databaseName("test")
                 .securityGroups((Collections.singletonList(databaseSecurityGroup)))
-                .vpcSubnets(SubnetSelection.builder().subnets(vpc.getPublicSubnets()).build())
+                .vpcSubnets(SubnetSelection.builder().subnets(vpc.getIsolatedSubnets()).build())
                 .instanceType(InstanceType.of(InstanceClass.T2, InstanceSize.MICRO))
                 .engine(instanceEngine)
                 .credentials(Credentials.fromPassword("ashwini", SecretValue.unsafePlainText("ashwini_pw")))
@@ -139,7 +143,7 @@ public class CdkAppStack extends Stack {
                                 .build())
 
                 .memoryLimitMiB(512)
-                .publicLoadBalancer(true)
+                .publicLoadBalancer(true) //public facing load balancer or not
                 .assignPublicIp(true)   // Need to clear doubt in this
                 .securityGroups(Collections.singletonList(databaseAndEcsSecurityGroup.getVar2()))
                 .build();
@@ -184,7 +188,6 @@ public class CdkAppStack extends Stack {
 
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/records")
-                .port(String.valueOf(8080))
                 .healthyHttpCodes("200")
                 .build());
 

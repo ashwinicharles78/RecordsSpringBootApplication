@@ -1,31 +1,39 @@
 package com.myorg;
 
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.ec2.InstanceType;
-import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedEc2Service;
-import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
-import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
-import util.Tuple;
-import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.*;
-import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.certificatemanager.Certificate;
+import software.amazon.awscdk.services.certificatemanager.ICertificate;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.*;
 import software.amazon.awscdk.services.ecr.IRepository;
 import software.amazon.awscdk.services.ecr.Repository;
-import software.amazon.awscdk.services.ecs.*;
+import software.amazon.awscdk.services.ecs.AddCapacityOptions;
+import software.amazon.awscdk.services.ecs.Cluster;
+import software.amazon.awscdk.services.ecs.ContainerImage;
+import software.amazon.awscdk.services.ecs.MachineImageType;
+import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedEc2Service;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
+import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
+import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.rds.*;
+import software.amazon.awscdk.services.route53.CnameRecord;
+import software.amazon.awscdk.services.route53.HostedZone;
+import software.amazon.awscdk.services.route53.HostedZoneAttributes;
+import software.amazon.awscdk.services.route53.IHostedZone;
+import software.amazon.awscdk.services.route53.targets.Route53RecordTarget;
 import software.constructs.Construct;
+import util.Tuple;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class CdkAppStack extends Stack {
-    public CdkAppStack(final Construct scope, final String id) {
+public class TestAppStack extends Stack {
+    public TestAppStack(final Construct scope, final String id) {
         this(scope, id, null);
     }
 
-    public CdkAppStack(final Construct scope, final String id, final StackProps props) {
+    public TestAppStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
 //         The code that defines your stack goes here
@@ -37,25 +45,9 @@ public class CdkAppStack extends Stack {
 
         Vpc vpc = getVpc("Records");
         Tuple<DatabaseInstance, SecurityGroup> databaseAndEcsSecurityGroup = getDatabaseInstanceAndEcsSecurityGroup(vpc);
-        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
-//        ApplicationLoadBalancedEc2Service applicationLoadBalancedEc2Service = getEc2(vpc, databaseAndEcsSecurityGroup);
-        new CfnOutput(this, "Records app DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedFargateService.getLoadBalancer().getLoadBalancerDnsName()).build());
-
-
-
-//        ContainerDefinition container = taskDefinition.addContainer("MyContainer", ContainerDefinitionOptions.builder()
-//                .image(ContainerImage.fromEcrRepository(ecrRepo, "latest"))
-//                .memoryLimitMiB(512)
-//                .cpu(256)
-//                .portMappings(List.of(PortMapping.builder().containerPort(8080).build()))
-//                .build());
-
-        // Create a service using Fargate service pattern
-//        ApplicationLoadBalancedFargateService service = ApplicationLoadBalancedFargateService.Builder.create(this, "MyService")
-//                .cluster(cluster)
-//                .taskDefinition(taskDefinition)
-//                .desiredCount(1)
-//                .build();
+//        ApplicationLoadBalancedFargateService applicationLoadBalancedFargateService = getEcs(vpc, databaseAndEcsSecurityGroup);
+        ApplicationLoadBalancedEc2Service applicationLoadBalancedEc2Service = getEc2(vpc, databaseAndEcsSecurityGroup);
+        new CfnOutput(this, "Records app DNS Name", CfnOutputProps.builder().value(applicationLoadBalancedEc2Service.getLoadBalancer().getLoadBalancerDnsName()).build());
 
     }
     private Vpc getVpc(String stackId) {
@@ -74,6 +66,7 @@ public class CdkAppStack extends Stack {
                                 .cidrMask(24)
                                 .build()))
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
+                .createInternetGateway(true)
                 .build();
 //        return Vpc.fromLookup(this, "DefaultVPC", VpcLookupOptions.builder().isDefault(true).build());
     }
@@ -161,9 +154,12 @@ public class CdkAppStack extends Stack {
         String datasourceUrl = "jdbc:mysql://" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointAddress() + ":" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointPort() + "/" + "test";
         Cluster cluster = Cluster.Builder.create(this, "Records" + "-ecs-cluster")
                 .capacity(AddCapacityOptions.builder()
+                        .vpcSubnets(SubnetSelection.builder()
+                                .subnets(vpc.getPublicSubnets())
+                                .build())
                         .instanceType(InstanceType.of(InstanceClass.T2, InstanceSize.MICRO))
                         .allowAllOutbound(true)
-                        .desiredCapacity(2)
+                        .desiredCapacity(1)
                         .machineImageType(MachineImageType.AMAZON_LINUX_2)
                         .build())
                 .vpc(vpc)
@@ -182,9 +178,24 @@ public class CdkAppStack extends Stack {
                                 "SPRING_DATASOURCE_PASSWORD", "ashwini_pw"
                         ))
                         .build())
-                .desiredCount(2)
+                .desiredCount(1)
                 .publicLoadBalancer(true)
                 .build();
+
+
+//        albes.getLoadBalancer().addListener("test",BaseApplicationListenerProps.builder()
+//                        .certificates((List<? extends IListenerCertificate>) domainCert)
+//                .protocol(ApplicationProtocol.HTTPS).build());
+
+        IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, "HostedZone", HostedZoneAttributes.builder()
+                        .hostedZoneId("Z02563453JHDJG1KGQIEU")
+                        .zoneName("ashwinicharles.com")
+                        .build());
+        CnameRecord.Builder.create(this, "CNameApiRecord")
+                        .recordName("cdk")
+                        .zone(zone)
+                        .domainName(albes.getLoadBalancer().getLoadBalancerDnsName())
+                        .build();
 
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/records")

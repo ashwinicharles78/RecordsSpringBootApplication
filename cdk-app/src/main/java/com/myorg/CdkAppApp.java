@@ -4,13 +4,11 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 
-import java.util.Arrays;
-
 public class CdkAppApp {
     public static void main(final String[] args) {
         App app = new App();
 
-        new CdkAppStack(app, "CdkAppStack", StackProps.builder()
+        new DevAppStack(app, "dev-stack", StackProps.builder()
                 // If you don't specify 'env', this stack will be environment-agnostic.
                 // Account/Region-dependent features and context lookups will not work,
                 // but a single synthesized template can be deployed anywhere.
@@ -32,6 +30,12 @@ public class CdkAppApp {
                         .build())
 
                 // For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
+                .build());
+
+        new TestAppStack(app, "test-stack", StackProps.builder()
+                .env(Environment.builder()
+                        .region("us-east-1")
+                        .build())
                 .build());
 
         app.synth();

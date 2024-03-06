@@ -18,7 +18,7 @@ public class Mykey implements Serializable {
         String[] stringList = StringUtils.split(mykey, "-");
         if(stringList.length == 2) {
             for (String key : stringList) {
-                if (Etype.NAME.name().equals(key) || Etype.PHONE.name().equals(key) || Etype.ADDRESS.name().equals(key)){
+                if (Etype.NAME.name().equals(key) || Etype.Phone.name().equals(key) || Etype.ADDRESS.name().equals(key)){
                     this.setType(Etype.valueOf(key));
                 } else {
                     this.setValue(key);

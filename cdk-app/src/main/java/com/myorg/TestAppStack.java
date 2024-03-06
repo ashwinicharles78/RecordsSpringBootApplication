@@ -2,7 +2,7 @@ package com.myorg;
 
 import software.amazon.awscdk.*;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
-import software.amazon.awscdk.services.codedeploy.LoadBalancer;
+import software.amazon.awscdk.services.certificatemanager.ICertificate;
 import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.*;
 import software.amazon.awscdk.services.ecr.IRepository;
@@ -15,21 +15,18 @@ import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedEc2Se
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-import software.amazon.awscdk.services.globalaccelerator.ListenerProps;
 import software.amazon.awscdk.services.rds.*;
-import software.amazon.awscdk.services.route53.ARecord;
+import software.amazon.awscdk.services.route53.CnameRecord;
 import software.amazon.awscdk.services.route53.HostedZone;
 import software.amazon.awscdk.services.route53.HostedZoneAttributes;
 import software.amazon.awscdk.services.route53.IHostedZone;
-import software.amazon.awscdk.services.route53.RecordTarget;
-import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
+import software.amazon.awscdk.services.route53.targets.Route53RecordTarget;
 import software.constructs.Construct;
 import util.Tuple;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class TestAppStack extends Stack {
     public TestAppStack(final Construct scope, final String id) {
@@ -56,7 +53,7 @@ public class TestAppStack extends Stack {
     private Vpc getVpc(String stackId) {
 
         return Vpc.Builder.create(this, stackId + "-vpc")
-                .maxAzs(2)
+                .maxAzs(2)  // Default is all AZs in region
                 .subnetConfiguration(List.of(
                         SubnetConfiguration.builder()
                                 .name("Public")
@@ -154,23 +151,6 @@ public class TestAppStack extends Stack {
     }
 
     private ApplicationLoadBalancedEc2Service getEc2(Vpc vpc, Tuple<DatabaseInstance, SecurityGroup> databaseAndEcsSecurityGroup) {
-
-/*        ApplicationLoadBalancer loadBalancer = ApplicationLoadBalancer.Builder.create(this, "loadBalancer")
-                .vpc(vpc)
-                .internetFacing(true)
-                .securityGroup(databaseAndEcsSecurityGroup.getVar2())
-                .build();
-        RedirectOptions redirectOptions = RedirectOptions.builder()
-                .protocol("HTTPS")
-                .port("443")
-                .build();
-
-        loadBalancer.addListener("listener", BaseApplicationListenerProps.builder()
-                .defaultAction(ListenerAction.redirect(redirectOptions))
-                .port(80)
-                .protocol(ApplicationProtocol.HTTP)
-                .build());*/
-
         String datasourceUrl = "jdbc:mysql://" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointAddress() + ":" + databaseAndEcsSecurityGroup.getVar1().getDbInstanceEndpointPort() + "/" + "test";
         Cluster cluster = Cluster.Builder.create(this, "Records" + "-ecs-cluster")
                 .capacity(AddCapacityOptions.builder()
@@ -184,11 +164,6 @@ public class TestAppStack extends Stack {
                         .build())
                 .vpc(vpc)
                 .build();
-
-        IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, "HostedZoneForService", HostedZoneAttributes.builder()
-                .hostedZoneId("Z08392861QFV8Q4Z51RTB")
-                .zoneName("ashwinicharles.info")
-                .build());
 
         ApplicationLoadBalancedEc2Service albes = ApplicationLoadBalancedEc2Service.Builder.create(this, "Service")
                 .cluster(cluster)
@@ -204,17 +179,23 @@ public class TestAppStack extends Stack {
                         ))
                         .build())
                 .desiredCount(1)
-                .certificate(Certificate.fromCertificateArn(this, "certificate","arn:aws:acm:us-east-1:654654602872:certificate/a80378e0-9feb-4aee-9563-0b7994cbdf5d"))
-                .protocol(ApplicationProtocol.HTTPS)
-                .domainName("ashwinicharles.info")
-                .domainZone(zone)
-                .redirectHttp(true)
                 .publicLoadBalancer(true)
                 .build();
 
-//        createRoute53Record(albes);
-//        configureListenersforHttps(albes);
 
+//        albes.getLoadBalancer().addListener("test",BaseApplicationListenerProps.builder()
+//                        .certificates((List<? extends IListenerCertificate>) domainCert)
+//                .protocol(ApplicationProtocol.HTTPS).build());
+
+        IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, "HostedZone", HostedZoneAttributes.builder()
+                        .hostedZoneId("Z02563453JHDJG1KGQIEU")
+                        .zoneName("ashwinicharles.com")
+                        .build());
+        CnameRecord.Builder.create(this, "CNameApiRecord")
+                        .recordName("cdk")
+                        .zone(zone)
+                        .domainName(albes.getLoadBalancer().getLoadBalancerDnsName())
+                        .build();
 
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/records")
@@ -223,37 +204,5 @@ public class TestAppStack extends Stack {
 
         return albes;
 
-    }
-
-    private void createRoute53Record(ApplicationLoadBalancedEc2Service albes) {
-
-        IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, "HostedZone", HostedZoneAttributes.builder()
-                .hostedZoneId("Z08392861QFV8Q4Z51RTB")
-                .zoneName("ashwinicharles.info")
-                .build());
-
-        ARecord.Builder.create(this, "ARecord")
-                .zone(zone)
-                .target(RecordTarget.fromAlias(new LoadBalancerTarget(albes.getLoadBalancer())))
-                .build();
-
-    }
-
-    private void configureListenersforHttps(ApplicationLoadBalancedEc2Service albes) {
-        IListenerCertificate certificate = ListenerCertificate.fromArn("arn:aws:acm:us-east-1:654654602872:certificate/a80378e0-9feb-4aee-9563-0b7994cbdf5d");
-
-//        ApplicationListener listener = albes.getLoadBalancer().getListeners().get(0);
-//        listener.addAction("Redirect", AddApplicationActionProps.builder().build());
-
-        albes.getLoadBalancer().addListener("test",BaseApplicationListenerProps.builder()
-                .certificates(List.of(certificate))
-                .defaultTargetGroups(List.of(albes.getTargetGroup()))
-                .protocol(ApplicationProtocol.HTTPS).build());
-
-/*        albes.getLoadBalancer().addRedirect(ApplicationLoadBalancerRedirectConfig.builder()
-                        .sourceProtocol(ApplicationProtocol.HTTP)
-                        .targetProtocol(ApplicationProtocol.HTTPS)
-                        .open(true)
-                .build());*/
     }
 }

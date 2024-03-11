@@ -1,11 +1,11 @@
 package com.records.Records.Entity;
 
+import com.records.Records.enums.Etype;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import org.springframework.util.StringUtils;
 
 import java.io.Serializable;
-import java.util.List;
 
 @Embeddable
 public class Mykey implements Serializable {

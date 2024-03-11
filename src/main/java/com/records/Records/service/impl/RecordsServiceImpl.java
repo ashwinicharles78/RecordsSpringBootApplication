@@ -16,8 +16,15 @@ public class RecordsServiceImpl implements RecordsService {
     private RecordsRepository repository;
 
     @Override
-    public Records saveRecord(Records records) {
-        return repository.save(records);
+    public String saveRecord(Records records) {
+        Records originalRecord = repository.findByMykey(records.getMykey()).isEmpty() ?
+                null : repository.findByMykey(records.getMykey()).get(0);
+        if(Objects.nonNull(originalRecord)) {
+            return "Record already exist for "+records.getMykey().getType().name()+"-"+records.getMykey().getValue();
+        }else{
+            repository.save(records);
+            return "Successfully added "+records.getMykey().getType().name()+"-"+records.getMykey().getValue();
+        }
     }
 
     @Override

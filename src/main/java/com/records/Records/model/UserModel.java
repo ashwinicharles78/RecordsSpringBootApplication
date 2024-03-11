@@ -1,5 +1,6 @@
 package com.records.Records.model;
 
+import com.records.Records.enums.Roles;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,5 +16,5 @@ public class UserModel {
     private String email;
     private String password;
     private String matchingPassword;
-    private List<String> roles;
+    private List<Roles> roles;
 }

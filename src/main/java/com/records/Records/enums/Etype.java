@@ -1,4 +1,4 @@
-package com.records.Records.Entity;
+package com.records.Records.enums;
 
 public enum Etype {
     NAME,

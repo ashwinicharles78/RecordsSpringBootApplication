@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @author Ashwini Charles on 3/10/2024
@@ -54,7 +55,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 true,
                 true,
                 true,
-                getAuthorities(user.getRoles())
+                getAuthorities(user.getRoles().stream().map(Enum::name).collect(Collectors.toList()))
         );
     }
 

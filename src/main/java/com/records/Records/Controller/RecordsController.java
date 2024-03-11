@@ -28,7 +28,7 @@ public class RecordsController {
 
     @PreAuthorize("hasRole('WRITER')")
     @PostMapping(path="/records")
-    public Records saveRecord(@RequestBody Records records) {
+    public String saveRecord(@RequestBody Records records) {
         return service.saveRecord(records);
     }
 

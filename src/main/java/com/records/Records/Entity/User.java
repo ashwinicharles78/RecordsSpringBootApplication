@@ -1,5 +1,6 @@
 package com.records.Records.Entity;
 
+import com.records.Records.enums.Roles;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -20,6 +21,6 @@ public class User {
     @Column(length = 60)
     private String password;
 
-    private List<String> roles;
+    private List<Roles> roles;
     private boolean enabled = false;
 }

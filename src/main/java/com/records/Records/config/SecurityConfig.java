@@ -30,9 +30,11 @@ public class SecurityConfig {
 
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                                .requestMatchers("/auth/login", "/auth/register").permitAll()
+                                .requestMatchers("/auth/**").permitAll()
                                 .requestMatchers(HttpMethod.GET,"/records").hasRole("READER")
                                 .requestMatchers(HttpMethod.POST,"/records").hasRole("WRITER")
+                                .requestMatchers(HttpMethod.PUT,"/records").hasRole("WRITER")
+                                .requestMatchers(HttpMethod.DELETE,"/records").hasRole("WRITER")
                                 .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(point))

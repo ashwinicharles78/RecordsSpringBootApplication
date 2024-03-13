@@ -44,4 +44,9 @@ public class RecordsController {
         return service.deleteRecord(new Mykey(mykey));
     }
 
+    @GetMapping("/")
+    public String testHealth() {
+        return "tested";
+    }
+
 }

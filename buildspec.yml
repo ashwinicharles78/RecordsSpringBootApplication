@@ -35,5 +35,5 @@ phases:
       - echo printing imagedefinitions.json
       - cat imagedefinitions.json
 artifacts:
-  files: imagedefinitions.json
-    - target/*.jar
+  files:
+      -imagedefinitions.json

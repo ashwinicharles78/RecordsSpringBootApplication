@@ -14,7 +14,9 @@ phases:
     commands:
       ### Building the image
       - echo java --version
+      - java --version
       - echo mvn -v
+      - mvn -v
       - mvn clean install
       - echo Building the Docker Image
       - docker build -t $IMAGE_REPO_NAME .

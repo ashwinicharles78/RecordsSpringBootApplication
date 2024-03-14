@@ -31,6 +31,7 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                                 .requestMatchers("/auth/**").permitAll()
+                                .requestMatchers("/").permitAll()
                                 .requestMatchers(HttpMethod.GET,"/records").hasRole("READER")
                                 .requestMatchers(HttpMethod.POST,"/records").hasRole("WRITER")
                                 .requestMatchers(HttpMethod.PUT,"/records").hasRole("WRITER")

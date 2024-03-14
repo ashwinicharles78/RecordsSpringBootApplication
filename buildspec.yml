@@ -36,4 +36,5 @@ phases:
       - cat imagedefinitions.json
 artifacts:
   files:
-       - '**/*'
+       - target/Records-0.0.1-SNAPSHOT.jar
+       - imagedefinitions.json

@@ -1,8 +1,6 @@
 FROM openjdk:17
 
-WORKDIR /RecordsSpringBootApplication
-
-COPY target/Records-0.0.1-SNAPSHOT.jar /RecordsSpringBootApplication/app.jar
+COPY target/Records-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 

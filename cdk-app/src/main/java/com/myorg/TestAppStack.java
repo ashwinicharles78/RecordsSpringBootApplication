@@ -147,11 +147,6 @@ public class TestAppStack extends Stack {
                 .publicLoadBalancer(true)
                 .build();
 
-        albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
-                .path("/records")
-                .healthyHttpCodes("200")
-                .build());
-
         return albes;
     }
 

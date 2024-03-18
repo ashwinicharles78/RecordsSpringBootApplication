@@ -1,4 +1,4 @@
-FROM openjdk:21
+FROM openjdk:17-alpine
 
 COPY target/Records-0.0.1-SNAPSHOT.jar app.jar
 

@@ -4,7 +4,9 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 
-public class CdkAppApp {
+import java.util.Arrays;
+
+public class MyPipelineApp {
     public static void main(final String[] args) {
         App app = new App();
 
@@ -13,9 +15,9 @@ public class CdkAppApp {
                 .region("us-east-1")
                 .build();
 
-        new TestAppStack(app, "dev", StackProps.builder()
+        new MyPipelineStack(app, "dev", StackProps.builder()
                 .env(env).build());
-        new TestAppStack(app, "test",StackProps.builder()
+        new MyPipelineStack(app, "test",StackProps.builder()
                 .env(env).build());
 
         app.synth();

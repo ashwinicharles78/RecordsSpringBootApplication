@@ -15,6 +15,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Objects;
@@ -43,13 +44,17 @@ public class AuthController {
 
     @PostMapping("/register")
     public String register(@RequestBody UserModel user) {
-        if(!Objects.nonNull(user)) {
-            return "User proper format";
-        } else {
+        if(Objects.nonNull(user)) {
+            if(null == user.getEmail())
+                return "Email cannot be null";
+            if(null == user.getPassword())
+                return "Password cannot be null";
+
             userService.registerUser(user);
             logger.info(user.getEmail() + " User saved ");
             return "Success";
         }
+        return "Please use proper format for user";
     }
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@RequestBody JwtRequest request) {
@@ -87,6 +92,11 @@ public class AuthController {
     @ExceptionHandler(BadCredentialsException.class)
     public String exceptionHandler() {
         return "Credentials Invalid !!";
+    }
+
+    @ExceptionHandler(AssertionError.class)
+    public String assertionErrorHandler() {
+        return "Email or Password Missing";
     }
 
 }

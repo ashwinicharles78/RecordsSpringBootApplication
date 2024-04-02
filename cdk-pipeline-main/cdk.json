@@ -59,6 +59,9 @@
     "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": true,
     "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
     "dev": "Records-dev",
-    "test": "Records-test"
+    "test": "Records-test",
+    "certificate-arn": "arn:aws:acm:us-east-1:654654602872:certificate/a80378e0-9feb-4aee-9563-0b7994cbdf5d",
+    "db-endpoint": "database-test.c1c4smm88v38.us-east-1.rds.amazonaws.com",
+    "recovery-snapshot-identifier-dev":"arn:aws:rds:us-east-1:654654602872:snapshot:dev-snapshot-instancedev87462c56-c3iyudruftsp"
   }
 }

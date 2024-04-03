@@ -1,8 +1,10 @@
 package com.records.Records.Controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.records.Records.helper.JwtHelper;
 import com.records.Records.model.JwtRequest;
 import com.records.Records.model.JwtResponse;
+import com.records.Records.model.KafkaUserData;
 import com.records.Records.model.UserModel;
 import com.records.Records.service.KafkaMessagePublisherService;
 import com.records.Records.service.UserService;
@@ -19,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.Objects;
 
 /**
@@ -47,11 +50,14 @@ public class AuthController {
     @Autowired
     private Environment env;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final String TOPIC_NAME = "kafka.topic.name";
 
     @PostMapping("/register")
-    public String register(@RequestBody UserModel user) {
+    public String register(@RequestBody UserModel user) throws IOException {
         if(Objects.nonNull(user)) {
             if(null == user.getEmail())
                 return "Email cannot be null";
@@ -60,7 +66,8 @@ public class AuthController {
 
             userService.registerUser(user);
             logger.info(user.getEmail() + " User saved ");
-            kafkaMessagePublisherService.sendMessageToTopic(user, env.getProperty(TOPIC_NAME));
+            KafkaUserData userData = objectMapper.readValue(objectMapper.writeValueAsBytes(user), KafkaUserData.class);
+            kafkaMessagePublisherService.sendMessageToTopic(userData, env.getProperty(TOPIC_NAME));
             return "Success";
         }
         return "Please use proper format for user";

@@ -1,6 +1,6 @@
 package com.records.Records.service.impl;
 
-import com.records.Records.model.UserModel;
+import com.records.Records.model.KafkaUserData;
 import com.records.Records.service.KafkaMessagePublisherService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ public class KafkaMessagePublisherServiceImpl implements KafkaMessagePublisherSe
     private final Logger logger = LoggerFactory.getLogger(KafkaMessagePublisherServiceImpl.class);
 
     @Override
-    public void sendMessageToTopic(UserModel user, String topic) {
+    public void sendMessageToTopic(KafkaUserData user, String topic) {
         CompletableFuture<SendResult<String, Object>> future = template.send(topic, user);
         future.whenComplete((result,ex)->{
             if (ex == null) {

@@ -1,7 +1,7 @@
 package com.records.Records.service;
 
-import com.records.Records.model.UserModel;
+import com.records.Records.model.KafkaUserData;
 
 public interface KafkaMessagePublisherService {
-    void sendMessageToTopic(UserModel message, String topic);
+    void sendMessageToTopic(KafkaUserData message, String topic);
 }

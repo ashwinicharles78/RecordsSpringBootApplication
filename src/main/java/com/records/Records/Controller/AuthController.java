@@ -4,10 +4,12 @@ import com.records.Records.helper.JwtHelper;
 import com.records.Records.model.JwtRequest;
 import com.records.Records.model.JwtResponse;
 import com.records.Records.model.UserModel;
+import com.records.Records.service.KafkaMessagePublisherService;
 import com.records.Records.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,6 +30,9 @@ import java.util.Objects;
 public class AuthController {
 
     @Autowired
+    private KafkaMessagePublisherService kafkaMessagePublisherService;
+
+    @Autowired
     private UserDetailsService userDetailsService;
 
     @Autowired
@@ -39,7 +44,11 @@ public class AuthController {
     @Autowired
     private JwtHelper helper;
 
+    @Autowired
+    private Environment env;
+
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
+    private static final String TOPIC_NAME = "kafka.topic.name";
 
     @PostMapping("/register")
     public String register(@RequestBody UserModel user) {
@@ -51,6 +60,7 @@ public class AuthController {
 
             userService.registerUser(user);
             logger.info(user.getEmail() + " User saved ");
+            kafkaMessagePublisherService.sendMessageToTopic(user, env.getProperty(TOPIC_NAME));
             return "Success";
         }
         return "Please use proper format for user";

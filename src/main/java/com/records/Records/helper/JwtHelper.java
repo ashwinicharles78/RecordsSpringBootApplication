@@ -6,7 +6,9 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -27,8 +29,8 @@ public class JwtHelper {
 
     public static final long JWT_TOKEN_VALIDITY = 18000;
 
-    @Value("${authentication.client.client-secret}")
-    private String secret;
+    @Autowired
+    private Environment env;
 
     //retrieve username from jwt token
     public String extractUsername(String token) {
@@ -72,7 +74,7 @@ public class JwtHelper {
     }
 
     private SecretKey getSecret() {
-       return Keys.hmacShaKeyFor(this.secret.getBytes(StandardCharsets.UTF_8));
+       return Keys.hmacShaKeyFor(this.env.getProperty("authentication.client.client-secret").getBytes(StandardCharsets.UTF_8));
     }
 
 }

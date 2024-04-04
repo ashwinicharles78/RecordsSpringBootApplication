@@ -22,6 +22,7 @@ public class KafkaProducerConfig {
     private Environment env;
 
     private static final String TOPIC_NAME = "kafka.topic.name";
+    private static final String KAFKA_ENDPOINT = "kafka.server.endpoint";
 
     @Bean
     public NewTopic createTopic(){
@@ -32,7 +33,7 @@ public class KafkaProducerConfig {
     public Map<String,Object> producerConfig(){
         Map<String,Object> props=new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                "localhost:9092");
+                env.getProperty(KAFKA_ENDPOINT));
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,

@@ -56,5 +56,12 @@
           <version>${junit.version}</version>
           <scope>test</scope>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/software.amazon.awscdk/msk-alpha -->
+        <dependency>
+            <groupId>software.amazon.awscdk</groupId>
+            <artifactId>msk-alpha</artifactId>
+            <version>2.135.0-alpha.0</version>
+        </dependency>
     </dependencies>
 </project>

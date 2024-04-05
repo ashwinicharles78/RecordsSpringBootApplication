@@ -3,6 +3,7 @@ package com.myorg;
 import org.jetbrains.annotations.NotNull;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.CfnOutputProps;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.Stack;
@@ -16,10 +17,12 @@ import software.amazon.awscdk.services.codebuild.Source;
 import software.amazon.awscdk.services.codepipeline.Artifact;
 import software.amazon.awscdk.services.codepipeline.IStage;
 import software.amazon.awscdk.services.codepipeline.Pipeline;
+import software.amazon.awscdk.services.codepipeline.PipelineType;
 import software.amazon.awscdk.services.codepipeline.StageOptions;
 import software.amazon.awscdk.services.codepipeline.actions.CodeBuildAction;
 import software.amazon.awscdk.services.codepipeline.actions.EcsDeployAction;
 import software.amazon.awscdk.services.codepipeline.actions.GitHubSourceAction;
+import software.amazon.awscdk.services.msk.alpha.*;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
@@ -80,7 +83,7 @@ public class MyPipelineStack extends Stack {
         @NotNull SecretValue secret = SecretValue.secretsManager(GITHUB_TOKEN);
 
         // CodePipeline
-        Pipeline pipeline = Pipeline.Builder.create(this, "MyPipeline").build();
+        Pipeline pipeline = Pipeline.Builder.create(this, "MyPipeline").pipelineType(PipelineType.V2).build();
 
         Vpc vpc = this.getVpc(id);
 
@@ -94,6 +97,8 @@ public class MyPipelineStack extends Stack {
         codebuildSG.addEgressRule(Peer.anyIpv4(), Port.allTraffic());
 
         DatabaseInstanceBase rdsDb = this.createRDSdb(id, vpc);
+
+        software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster = this.createMKSCluster(vpc, id);
 
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
         // CodeBuild Project
@@ -126,12 +131,15 @@ public class MyPipelineStack extends Stack {
                                         .build(),
                                 "JDBC_CONNECTION", BuildEnvironmentVariable.builder()
                                         .value(datasourceUrl)
+                                        .build(),
+                                "KAFKA_ENDPOINT",BuildEnvironmentVariable.builder()
+                                        .value(kafkaCluster.getBootstrapBrokers())
                                         .build()
                                 ))
                         .build())
                 .build();
 
-        ApplicationLoadBalancedEc2Service ecsService = this.getEc2(vpc, id, rdsDb);
+        ApplicationLoadBalancedEc2Service ecsService = this.getEc2(vpc, id, rdsDb, kafkaCluster);
 
         // Add source stage
         IStage sourceStage = pipeline.addStage(StageOptions.builder()
@@ -169,6 +177,7 @@ public class MyPipelineStack extends Stack {
                 .actions(List.of(
                         EcsDeployAction.Builder.create()
                                 .actionName("DeployAction")
+                                .deploymentTimeout(Duration.minutes(10))
                                 .service(ecsService.getService())
                                 .input(buildOutput)
                                 .runOrder(3)
@@ -176,6 +185,74 @@ public class MyPipelineStack extends Stack {
                 ))
                 .build());
 
+    }
+
+    private software.amazon.awscdk.services.msk.alpha.Cluster createMKSCluster(Vpc vpc, String id) {
+//        Stream stream = Stream.Builder.create(this, "MyFirstStream")
+//                .streamName("my-awesome-stream")
+//                .shardCount(1)
+//                .streamMode(StreamMode.ON_DEMAND)
+//                .retentionPeriod(Duration.days(7))
+//                .build();
+//
+//
+//        CfnCluster.Builder.create(this,"MSKCluster-"+id)
+//                .kafkaVersion()
+//                .build()
+
+        SecurityGroup kafkaSG = new SecurityGroup(this, "Records" + "-MSK-security-group", SecurityGroupProps.builder()
+                .vpc(vpc)
+                .description("Kafka Security Group")
+                .build());
+
+        kafkaSG.addIngressRule(Peer.anyIpv4(), Port.allTraffic());
+        kafkaSG.addEgressRule(Peer.anyIpv4(), Port.allTraffic());
+
+        return software.amazon.awscdk.services.msk.alpha.Cluster.Builder.create(this, "test-cluster-"+id)
+                .clusterName("kafka-cluster-"+id)
+                .kafkaVersion(KafkaVersion.V3_5_1)
+                .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
+                .vpc(vpc)
+                .encryptionInTransit(EncryptionInTransitConfig.builder()
+                        .clientBroker(ClientBrokerEncryption.PLAINTEXT)
+                        .build())
+//                .clientAuthentication(ClientAuthentication.sasl(SaslAuthProps.builder().iam(false).scram(false).build()))
+                .vpcSubnets(SubnetSelection.builder().subnets(vpc.getPublicSubnets()).build())
+                .ebsStorageInfo(EbsStorageInfo.builder().volumeSize(1).build())
+                .numberOfBrokerNodes(1)
+                .securityGroups(List.of(kafkaSG))
+                .build();
+
+//        CfnCluster cfnCluster = CfnCluster.Builder.create(this, "MyCfnCluster")
+//                .brokerNodeGroupInfo(CfnCluster.BrokerNodeGroupInfoProperty.builder()
+//                        .clientSubnets(List.of("clientSubnets"))
+//                        .instanceType("instanceType")
+//                        // the properties below are optional
+//                        .brokerAzDistribution("brokerAzDistribution")
+//                        .connectivityInfo(CfnCluster.ConnectivityInfoProperty.builder()
+//                                .publicAccess(CfnCluster.PublicAccessProperty.builder()
+//                                        .type("type")
+//                                        .build())
+//                                .vpcConnectivity(CfnCluster.VpcConnectivityProperty.builder()
+//                                        .clientAuthentication(CfnCluster.VpcConnectivityClientAuthenticationProperty.builder()
+//                                                .build())
+//                                        .build())
+//                                .build())
+//                        .securityGroups(List.of("securityGroups"))
+//                        .storageInfo(CfnCluster.StorageInfoProperty.builder()
+//                                .ebsStorageInfo(CfnCluster.EBSStorageInfoProperty.builder()
+//                                        .provisionedThroughput(CfnCluster.ProvisionedThroughputProperty.builder()
+//                                                .enabled(false)
+//                                                .volumeThroughput(1)
+//                                                .build())
+//                                        .volumeSize(1)
+//                                        .build())
+//                                .build())
+//                        .build())
+//                .clusterName("test-cluster"+id)
+//                .kafkaVersion("3.5.1")
+//                .numberOfBrokerNodes(1)
+//                .build();
     }
 
     private DatabaseInstanceBase createRDSdb(String id, Vpc vpc) {
@@ -249,7 +326,7 @@ public class MyPipelineStack extends Stack {
                 .build();
     }
 
-    private ApplicationLoadBalancedEc2Service getEc2(Vpc vpc, String id, DatabaseInstanceBase rdsDb) {
+    private ApplicationLoadBalancedEc2Service getEc2(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
         Cluster cluster = Cluster.Builder.create(this, RECORDS + "-ecs-cluster")
                 .capacity(AddCapacityOptions.builder()
@@ -268,8 +345,7 @@ public class MyPipelineStack extends Stack {
         if(this.getNode().tryGetContext(id).toString().contains("test"))
             albes = this.getECSSeviceForHttps(datasourceUrl, cluster,id);
         else
-            albes = this.getECSSeviceForNonHttps(datasourceUrl, cluster,id);
-
+            albes = this.getECSSeviceForNonHttps(datasourceUrl, cluster,id, kafkaCluster);
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/auth/health")
                 .healthyHttpCodes("200")
@@ -278,7 +354,7 @@ public class MyPipelineStack extends Stack {
         return albes;
     }
 
-    private ApplicationLoadBalancedEc2Service getECSSeviceForNonHttps(String datasourceUrl, Cluster cluster, String id) {
+    private ApplicationLoadBalancedEc2Service getECSSeviceForNonHttps(String datasourceUrl, Cluster cluster, String id, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
         return ApplicationLoadBalancedEc2Service.Builder.create(this, "Service")
                 .cluster(cluster)
                 .protocol(ApplicationProtocol.HTTP)
@@ -293,7 +369,8 @@ public class MyPipelineStack extends Stack {
                         .environment(Map.of(
                                 "SPRING_DATASOURCE_URL", datasourceUrl,
                                 "SPRING_DATASOURCE_USERNAME", "admin",
-                                "SPRING_DATASOURCE_PASSWORD", "adminadmin"
+                                "SPRING_DATASOURCE_PASSWORD", "adminadmin",
+                                "KAFKA_ENDPOINT", kafkaCluster.getBootstrapBrokers()
                         ))
                         .build())
                 .desiredCount(1)

@@ -3,6 +3,7 @@ package com.myorg;
 import org.jetbrains.annotations.NotNull;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.CfnOutputProps;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.Stack;
@@ -16,10 +17,12 @@ import software.amazon.awscdk.services.codebuild.Source;
 import software.amazon.awscdk.services.codepipeline.Artifact;
 import software.amazon.awscdk.services.codepipeline.IStage;
 import software.amazon.awscdk.services.codepipeline.Pipeline;
+import software.amazon.awscdk.services.codepipeline.PipelineType;
 import software.amazon.awscdk.services.codepipeline.StageOptions;
 import software.amazon.awscdk.services.codepipeline.actions.CodeBuildAction;
 import software.amazon.awscdk.services.codepipeline.actions.EcsDeployAction;
 import software.amazon.awscdk.services.codepipeline.actions.GitHubSourceAction;
+import software.amazon.awscdk.services.msk.alpha.*;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
@@ -66,6 +69,9 @@ public class MyPipelineStack extends Stack {
     private static final String GITHUB_TOKEN = "github-token";
     private static final String CERTIFICATE_ARN = "certificate-arn";
     private static final String RECORDS = "records";
+    private static final String EMPTY = "";
+    private static final List<String> RECORDS_REPO = List.of("records-producer", "records-consumer");
+    private static final List<String> RECORDS_GIT = List.of("RecordsSpringBootApplication", "RecordsConsumerApp");
 
     public MyPipelineStack(final Construct scope, final String id) {
         this(scope, id, null);
@@ -80,11 +86,10 @@ public class MyPipelineStack extends Stack {
         @NotNull SecretValue secret = SecretValue.secretsManager(GITHUB_TOKEN);
 
         // CodePipeline
-        Pipeline pipeline = Pipeline.Builder.create(this, "MyPipeline").build();
 
         Vpc vpc = this.getVpc(id);
 
-        SecurityGroup codebuildSG = new SecurityGroup(this, "Records" + "-CodeBuild-security-group", SecurityGroupProps.builder()
+        SecurityGroup codebuildSG = new SecurityGroup(this, RECORDS + "-CodeBuild-security-group", SecurityGroupProps.builder()
                 .vpc(vpc)
                 .description("CodeBuild Security Group")
                 .build());
@@ -95,86 +100,130 @@ public class MyPipelineStack extends Stack {
 
         DatabaseInstanceBase rdsDb = this.createRDSdb(id, vpc);
 
+        software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster = this.createMKSCluster(vpc, id);
+
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
         // CodeBuild Project
-        Project codeBuildProject = Project.Builder.create(this, "MyCodeBuildProject")
-                .projectName(this.getNode().tryGetContext(id)+"-build-project")
+        ApplicationLoadBalancedEc2Service ecsService = this.getEc2ForProducer(vpc, id, rdsDb, kafkaCluster);
+        ApplicationLoadBalancedEc2Service ecsServiceConsume = this.getEc2ForConsumer(vpc, id, rdsDb, kafkaCluster);
+
+        List<ApplicationLoadBalancedEc2Service> services = List.of(ecsService, ecsServiceConsume);
+        for (int i=0 ; i < RECORDS_REPO.toArray().length; i++ ) {
+            Project codeBuildProject = Project.Builder.create(this, "MyCodeBuildProject")
+                    .projectName(this.getNode().tryGetContext(id) + "-build-project")
+                    .vpc(vpc)
+                    .subnetSelection(SubnetSelection.builder().subnets(vpc.getPrivateSubnets()).build())
+                    .securityGroups(List.of(
+                            codebuildSG
+                    ))
+                    .source(Source.gitHub(GitHubSourceProps.builder()
+                            .owner("ashwinicharle78")
+                            .repo(RECORDS_GIT.get(i))
+                            .branchOrRef("main").build()))
+                    .role(Role.fromRoleArn(this, "currentRole", "arn:aws:iam::654654602872:role/service-role/codebuild-testing-build-again-service-role"))
+                    .environment(BuildEnvironment.builder()
+                            .buildImage(AMAZON_LINUX_2_5)
+                            .privileged(true)
+                            .environmentVariables(Map.of("IMAGE_REPO_NAME", BuildEnvironmentVariable.builder()
+                                            .value(RECORDS_REPO.get(0))
+                                            .build(),
+                                    "AWS_DEFAULT_REGION", BuildEnvironmentVariable.builder()
+                                            .value(Objects.requireNonNull(props.getEnv()).getRegion())
+                                            .build(),
+                                    "AWS_ACCOUNT_ID", BuildEnvironmentVariable.builder()
+                                            .value(props.getEnv().getAccount())
+                                            .build(),
+                                    "IMAGE_TAG", BuildEnvironmentVariable.builder()
+                                            .value("latest")
+                                            .build(),
+                                    "JDBC_CONNECTION", BuildEnvironmentVariable.builder()
+                                            .value(datasourceUrl)
+                                            .build(),
+                                    "KAFKA_ENDPOINT", BuildEnvironmentVariable.builder()
+                                            .value(kafkaCluster.getBootstrapBrokers())
+                                            .build()
+                            ))
+                            .build())
+                    .build();
+
+            Pipeline pipeline = Pipeline.Builder.create(this, "MyPipeline-"+RECORDS_REPO.get(0)).pipelineType(PipelineType.V2).build();
+            // Add source stage
+            IStage sourceStage = pipeline.addStage(StageOptions.builder()
+                    .stageName("Source")
+                    .actions(List.of(
+                            GitHubSourceAction.Builder.create()
+                                    .actionName("GitHub_Source")
+                                    .owner("ashwinicharles78")
+                                    .repo(RECORDS_GIT.get(i))
+                                    .branch("main")
+                                    .oauthToken(secret)
+                                    .output(sourceActionOutput)
+                                    .runOrder(1)
+                                    .build()
+                    ))
+                    .build());
+
+            // Add build stage
+            IStage buildStage = pipeline.addStage(StageOptions.builder()
+                    .stageName("Build")
+                    .actions(List.of(
+                            CodeBuildAction.Builder.create()
+                                    .actionName("CodeBuild")
+                                    .input(sourceActionOutput)
+                                    .outputs(List.of(buildOutput))
+                                    .project(codeBuildProject)
+                                    .runOrder(2)
+                                    .build()
+                    ))
+                    .build());
+
+            // Add deploy stage
+            IStage deployStage = pipeline.addStage(StageOptions.builder()
+                    .stageName("Deploy")
+                    .actions(List.of(
+                            EcsDeployAction.Builder.create()
+                                    .actionName("DeployAction")
+                                    .deploymentTimeout(Duration.minutes(5))
+                                    .service(services.get(i).getService())
+                                    .input(buildOutput)
+                                    .runOrder(3)
+                                    .build()
+                    ))
+                    .build());
+        }
+
+    }
+
+    private software.amazon.awscdk.services.msk.alpha.Cluster createMKSCluster(Vpc vpc, String id) {
+//        Stream stream = Stream.Builder.create(this, "MyFirstStream")
+//                .streamName("my-awesome-stream")
+//                .shardCount(1)
+//                .streamMode(StreamMode.ON_DEMAND)
+//                .retentionPeriod(Duration.days(7))
+//                .build();
+
+        SecurityGroup kafkaSG = new SecurityGroup(this, "Records" + "-MSK-security-group", SecurityGroupProps.builder()
                 .vpc(vpc)
-                .subnetSelection(SubnetSelection.builder().subnets(vpc.getPrivateSubnets()).build())
-                .securityGroups(List.of(
-                    codebuildSG
-                ))
-                .source(Source.gitHub(GitHubSourceProps.builder()
-                                .owner("ashwinicharle78")
-                                .repo("RecordsSpringBootApplication")
-                                .branchOrRef("main").build()))
-                .role(Role.fromRoleArn(this, "currentRole", "arn:aws:iam::654654602872:role/service-role/codebuild-testing-build-again-service-role"))
-                .environment(BuildEnvironment.builder()
-                        .buildImage(AMAZON_LINUX_2_5)
-                        .privileged(true)
-                        .environmentVariables(Map.of("IMAGE_REPO_NAME", BuildEnvironmentVariable.builder()
-                                        .value(RECORDS)
-                                        .build(),
-                                "AWS_DEFAULT_REGION", BuildEnvironmentVariable.builder()
-                                        .value(Objects.requireNonNull(props.getEnv()).getRegion())
-                                        .build(),
-                                "AWS_ACCOUNT_ID", BuildEnvironmentVariable.builder()
-                                        .value(props.getEnv().getAccount())
-                                        .build(),
-                                "IMAGE_TAG", BuildEnvironmentVariable.builder()
-                                        .value("latest")
-                                        .build(),
-                                "JDBC_CONNECTION", BuildEnvironmentVariable.builder()
-                                        .value(datasourceUrl)
-                                        .build()
-                                ))
+                .description("Kafka Security Group")
+                .build());
+
+        kafkaSG.addIngressRule(Peer.anyIpv4(), Port.allTraffic());
+        kafkaSG.addEgressRule(Peer.anyIpv4(), Port.allTraffic());
+
+        return software.amazon.awscdk.services.msk.alpha.Cluster.Builder.create(this, "test-cluster-"+id)
+                .clusterName("kafka-cluster-"+id)
+                .kafkaVersion(KafkaVersion.V3_5_1)
+                .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
+                .vpc(vpc)
+                .encryptionInTransit(EncryptionInTransitConfig.builder()
+                        .clientBroker(ClientBrokerEncryption.PLAINTEXT)
                         .build())
+                .vpcSubnets(SubnetSelection.builder().subnets(vpc.getPublicSubnets()).build())
+                .ebsStorageInfo(EbsStorageInfo.builder().volumeSize(1).build())
+                .numberOfBrokerNodes(1)
+                .configurationInfo(ClusterConfigurationInfo.builder().revision(2).arn("arn:aws:kafka:us-east-1:654654602872:configuration/config-test/d66b33c2-a63e-4989-b254-3de2b92a20ef-12").build())
+                .securityGroups(List.of(kafkaSG))
                 .build();
-
-        ApplicationLoadBalancedEc2Service ecsService = this.getEc2(vpc, id, rdsDb);
-
-        // Add source stage
-        IStage sourceStage = pipeline.addStage(StageOptions.builder()
-                .stageName("Source")
-                .actions(List.of(
-                        GitHubSourceAction.Builder.create()
-                                .actionName("GitHub_Source")
-                                .owner("ashwinicharles78")
-                                .repo("RecordsSpringBootApplication")
-                                .branch("main")
-                                .oauthToken(secret)
-                                .output(sourceActionOutput)
-                                .runOrder(1)
-                                .build()
-                ))
-                .build());
-
-        // Add build stage
-        IStage buildStage = pipeline.addStage(StageOptions.builder()
-                .stageName("Build")
-                .actions(List.of(
-                        CodeBuildAction.Builder.create()
-                                .actionName("CodeBuild")
-                                .input(sourceActionOutput)
-                                .outputs(List.of(buildOutput))
-                                .project(codeBuildProject)
-                                .runOrder(2)
-                                .build()
-                ))
-                .build());
-
-        // Add deploy stage
-        IStage deployStage = pipeline.addStage(StageOptions.builder()
-                .stageName("Deploy")
-                .actions(List.of(
-                        EcsDeployAction.Builder.create()
-                                .actionName("DeployAction")
-                                .service(ecsService.getService())
-                                .input(buildOutput)
-                                .runOrder(3)
-                                .build()
-                ))
-                .build());
 
     }
 
@@ -249,7 +298,7 @@ public class MyPipelineStack extends Stack {
                 .build();
     }
 
-    private ApplicationLoadBalancedEc2Service getEc2(Vpc vpc, String id, DatabaseInstanceBase rdsDb) {
+    private ApplicationLoadBalancedEc2Service getEc2ForProducer(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
         Cluster cluster = Cluster.Builder.create(this, RECORDS + "-ecs-cluster")
                 .capacity(AddCapacityOptions.builder()
@@ -268,8 +317,7 @@ public class MyPipelineStack extends Stack {
         if(this.getNode().tryGetContext(id).toString().contains("test"))
             albes = this.getECSSeviceForHttps(datasourceUrl, cluster,id);
         else
-            albes = this.getECSSeviceForNonHttps(datasourceUrl, cluster,id);
-
+            albes = this.getECSSeviceForNonHttps(datasourceUrl, 8080, RECORDS_REPO.get(0), cluster,id, kafkaCluster);
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/auth/health")
                 .healthyHttpCodes("200")
@@ -278,7 +326,29 @@ public class MyPipelineStack extends Stack {
         return albes;
     }
 
-    private ApplicationLoadBalancedEc2Service getECSSeviceForNonHttps(String datasourceUrl, Cluster cluster, String id) {
+    private ApplicationLoadBalancedEc2Service getEc2ForConsumer(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
+        Cluster cluster = Cluster.Builder.create(this, RECORDS + "-ecs-cluster")
+                .capacity(AddCapacityOptions.builder()
+                        .vpcSubnets(SubnetSelection.builder()
+                                .subnets(vpc.getPublicSubnets())
+                                .build())
+                        .instanceType(InstanceType.of(InstanceClass.T2, InstanceSize.MICRO))
+                        .allowAllOutbound(true)
+                        .desiredCapacity(1)
+                        .canContainersAccessInstanceRole(true)
+                        .build())
+                .vpc(vpc)
+                .build();
+
+        ApplicationLoadBalancedEc2Service albes;
+        if(this.getNode().tryGetContext(id).toString().contains("test"))
+            albes = this.getECSSeviceForHttps(EMPTY, cluster,id);
+        else
+            albes = this.getECSSeviceForNonHttps(EMPTY,8082, RECORDS_REPO.get(1), cluster,id, kafkaCluster);
+        return albes;
+    }
+
+    private ApplicationLoadBalancedEc2Service getECSSeviceForNonHttps(String datasourceUrl, Number port, String repoName, Cluster cluster, String id, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
         return ApplicationLoadBalancedEc2Service.Builder.create(this, "Service")
                 .cluster(cluster)
                 .protocol(ApplicationProtocol.HTTP)
@@ -287,13 +357,14 @@ public class MyPipelineStack extends Stack {
                 .desiredCount(1)
                 .taskImageOptions(ApplicationLoadBalancedTaskImageOptions.builder()
                         .image(ContainerImage.fromEcrRepository(Repository.fromRepositoryName(this,
-                                "build-repository", RECORDS)))
-                        .containerPort(8080)
+                                "build-repository", repoName)))
+                        .containerPort(port)
                         .containerName(this.getNode().tryGetContext(id).toString()+"-container")
                         .environment(Map.of(
                                 "SPRING_DATASOURCE_URL", datasourceUrl,
                                 "SPRING_DATASOURCE_USERNAME", "admin",
-                                "SPRING_DATASOURCE_PASSWORD", "adminadmin"
+                                "SPRING_DATASOURCE_PASSWORD", "adminadmin",
+                                "KAFKA_ENDPOINT", kafkaCluster.getBootstrapBrokers()
                         ))
                         .build())
                 .desiredCount(1)

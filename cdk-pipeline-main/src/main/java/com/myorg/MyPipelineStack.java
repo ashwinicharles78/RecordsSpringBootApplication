@@ -70,8 +70,8 @@ public class MyPipelineStack extends Stack {
     private static final String CERTIFICATE_ARN = "certificate-arn";
     private static final String RECORDS = "records";
     private static final String EMPTY = "";
-    private static final List<String> RECORDS_REPO = List.of("records-producer", "records-consumer");
-    private static final List<String> RECORDS_GIT = List.of("RecordsSpringBootApplication", "RecordsConsumerApp");
+    private final List<String> RECORDS_REPO = List.of("records-producer", "records-consumer");
+    private final List<String> RECORDS_GIT = List.of("RecordsSpringBootApplication", "RecordsConsumerApp");
 
     public MyPipelineStack(final Construct scope, final String id) {
         this(scope, id, null);
@@ -104,10 +104,10 @@ public class MyPipelineStack extends Stack {
 
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
         // CodeBuild Project
-        ApplicationLoadBalancedEc2Service ecsService = this.getEc2ForProducer(vpc, id, rdsDb, kafkaCluster);
-        ApplicationLoadBalancedEc2Service ecsServiceConsume = this.getEc2ForConsumer(vpc, id, rdsDb, kafkaCluster);
+        List<ApplicationLoadBalancedEc2Service> services = this.getEc2ForProducer(vpc, id, rdsDb, kafkaCluster);
+//        ApplicationLoadBalancedEc2Service ecsServiceConsume = this.getEc2ForConsumer(vpc, id, rdsDb, kafkaCluster);
 
-        List<ApplicationLoadBalancedEc2Service> services = List.of(ecsService, ecsServiceConsume);
+//        List<ApplicationLoadBalancedEc2Service> services = List.of(ecsService, ecsServiceConsume);
         for (int i=0 ; i < RECORDS_REPO.toArray().length; i++ ) {
             Project codeBuildProject = Project.Builder.create(this, "MyCodeBuildProject")
                     .projectName(this.getNode().tryGetContext(id) + "-build-project")
@@ -298,9 +298,10 @@ public class MyPipelineStack extends Stack {
                 .build();
     }
 
-    private ApplicationLoadBalancedEc2Service getEc2ForProducer(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
+    private List<ApplicationLoadBalancedEc2Service> getEc2ForProducer(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
         String datasourceUrl = "jdbc:mysql://" + rdsDb.getDbInstanceEndpointAddress() + ":" + rdsDb.getDbInstanceEndpointPort() + "/" + "test";
-        Cluster cluster = Cluster.Builder.create(this, RECORDS + "-ecs-cluster")
+        Cluster cluster = Cluster.Builder.create(this, RECORDS_REPO.get(0) + "-ecs-cluster1")
+                .clusterName(RECORDS_REPO.get(1) + "-ecs-cluster1")
                 .capacity(AddCapacityOptions.builder()
                         .vpcSubnets(SubnetSelection.builder()
                                 .subnets(vpc.getPublicSubnets())
@@ -314,20 +315,26 @@ public class MyPipelineStack extends Stack {
                 .build();
 
         ApplicationLoadBalancedEc2Service albes;
-        if(this.getNode().tryGetContext(id).toString().contains("test"))
-            albes = this.getECSSeviceForHttps(datasourceUrl, cluster,id);
-        else
-            albes = this.getECSSeviceForNonHttps(datasourceUrl, 8080, RECORDS_REPO.get(0), cluster,id, kafkaCluster);
+        ApplicationLoadBalancedEc2Service albes2;
+        if(this.getNode().tryGetContext(id).toString().contains("test")) {
+            albes = this.getECSSeviceForHttps(datasourceUrl, cluster, id);
+            albes2 = this.getECSSeviceForHttps(EMPTY, cluster, id);
+        }
+        else {
+            albes = this.getECSSeviceForNonHttps(datasourceUrl, 8080, RECORDS_REPO.get(0), cluster, id, kafkaCluster);
+            albes2 = this.getECSSeviceForNonHttps(EMPTY,8082, RECORDS_REPO.get(1), cluster,id, kafkaCluster);
+        }
         albes.getTargetGroup().configureHealthCheck(new HealthCheck.Builder()
                 .path("/auth/health")
                 .healthyHttpCodes("200")
                 .build());
 
-        return albes;
+        return List.of(albes, albes2);
     }
 
     private ApplicationLoadBalancedEc2Service getEc2ForConsumer(Vpc vpc, String id, DatabaseInstanceBase rdsDb, software.amazon.awscdk.services.msk.alpha.Cluster kafkaCluster) {
-        Cluster cluster = Cluster.Builder.create(this, RECORDS + "-ecs-cluster")
+        Cluster cluster = Cluster.Builder.create(this, RECORDS_REPO.get(1) + "-ecs-cluster2")
+                .clusterName(RECORDS_REPO.get(1) + "-ecs-cluster2")
                 .capacity(AddCapacityOptions.builder()
                         .vpcSubnets(SubnetSelection.builder()
                                 .subnets(vpc.getPublicSubnets())

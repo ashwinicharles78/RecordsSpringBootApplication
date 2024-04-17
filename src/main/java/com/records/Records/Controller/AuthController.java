@@ -1,6 +1,7 @@
 package com.records.Records.Controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.records.Records.Entity.User;
 import com.records.Records.helper.JwtHelper;
 import com.records.Records.model.JwtRequest;
 import com.records.Records.model.JwtResponse;
@@ -64,9 +65,9 @@ public class AuthController {
             if(null == user.getPassword())
                 return "Password cannot be null";
 
-            userService.registerUser(user);
+            User userOriginal = userService.registerUser(user);
             logger.info(user.getEmail() + " User saved ");
-            KafkaUserData userData = objectMapper.readValue(objectMapper.writeValueAsBytes(user), KafkaUserData.class);
+            KafkaUserData userData = objectMapper.readValue(objectMapper.writeValueAsBytes(userOriginal), KafkaUserData.class);
             kafkaMessagePublisherService.sendMessageToTopic(userData, env.getProperty(TOPIC_NAME));
             return "Success";
         }

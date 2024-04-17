@@ -19,16 +19,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User registerUser(UserModel userModel) {
-        User user = new User();
-        user.setEmail(userModel.getEmail());
-        user.setFirstName(userModel.getFirstName());
-        user.setLastName(userModel.getLastName());
-        user.setRoles(userModel.getRoles());
-        user.setPassword(passwordEncoder.encode(userModel.getPassword()));
-        user.setEnabled(true);
+        if(null != userRepository.findByEmail(userModel.getEmail())) {
+            throw new RuntimeException("User Exists");
+        }else  {
+            User user = new User();
+            user.setEmail(userModel.getEmail());
+            user.setFirstName(userModel.getFirstName());
+            user.setLastName(userModel.getLastName());
+            user.setRoles(userModel.getRoles());
+            user.setPassword(passwordEncoder.encode(userModel.getPassword()));
+            user.setEnabled(true);
 
-        userRepository.save(user);
-        return user;
+            userRepository.save(user);
+            return user;
+        }
     }
 
 }

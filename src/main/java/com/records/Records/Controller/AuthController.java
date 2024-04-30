@@ -9,6 +9,7 @@ import com.records.Records.model.KafkaUserData;
 import com.records.Records.model.UserModel;
 import com.records.Records.service.KafkaMessagePublisherService;
 import com.records.Records.service.UserService;
+import com.records.Records.service.impl.MailConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 /**
  * @author Ashwini Charles on 3/10/2024
@@ -54,6 +56,9 @@ public class AuthController {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private MailConfig mail;
+
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final String TOPIC_NAME = "kafka.topic.name";
 
@@ -69,6 +74,7 @@ public class AuthController {
             logger.info(user.getEmail() + " User saved ");
             KafkaUserData userData = objectMapper.readValue(objectMapper.writeValueAsBytes(userOriginal), KafkaUserData.class);
             kafkaMessagePublisherService.sendMessageToTopic(userData, env.getProperty(TOPIC_NAME));
+            mail.sendEmail();
             return "Success";
         }
         return "Please use proper format for user";

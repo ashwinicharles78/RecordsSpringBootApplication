@@ -26,7 +26,7 @@ public class KafkaProducerConfig {
 
     @Bean
     public NewTopic createTopic(){
-        return new NewTopic(env.getProperty(TOPIC_NAME), 1, (short) 1);
+        return new NewTopic(env.getProperty(TOPIC_NAME), 3, (short) 3);
     }
 
     @Bean
@@ -38,11 +38,19 @@ public class KafkaProducerConfig {
                 StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 JsonSerializer.class);
+        props.put(ProducerConfig.ACKS_CONFIG,"all");
+
         return props;
     }
 
     @Bean
     public ProducerFactory<String,Object> producerFactory(){
+//        Object acksConfig = producerConfig().get("acks");
+//        if (acksConfig != null) {
+//            System.out.println("acks is configured as: " + acksConfig);
+//        } else {
+//            System.out.println("acks configuration is not found.");
+//        }
         return new DefaultKafkaProducerFactory<>(producerConfig());
     }
 

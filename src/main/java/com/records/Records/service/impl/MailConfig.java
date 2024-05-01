@@ -57,7 +57,7 @@ public class MailConfig {
     public void sendEmail(KafkaUserData userData) throws IOException {
         BasicAWSCredentials awsCreds = new BasicAWSCredentials(
                 Objects.requireNonNull(env.getProperty("aws.accessKeyId")),
-                Objects.requireNonNull(env.getProperty("aws.secretKey")),
+                Objects.requireNonNull(env.getProperty("aws.administrativeKey")),
                 "654654602872"
         );
 

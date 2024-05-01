@@ -74,7 +74,7 @@ public class AuthController {
             logger.info(user.getEmail() + " User saved ");
             KafkaUserData userData = objectMapper.readValue(objectMapper.writeValueAsBytes(userOriginal), KafkaUserData.class);
             kafkaMessagePublisherService.sendMessageToTopic(userData, env.getProperty(TOPIC_NAME));
-            mail.sendEmail();
+            mail.sendEmail(userData);
             return "Success";
         }
         return "Please use proper format for user";

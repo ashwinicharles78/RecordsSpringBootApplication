@@ -19,6 +19,7 @@ phases:
       - mvn -v
       - mvn clean install
       - echo "JDBC_CONNECTION=${JDBC_CONNECTION}" >> src/main/resources/application.properties
+      - echo "KAFKA_ENDPOINT=${KAFKA_ENDPOINT}" >> src/main/resources/application.properties
       - echo Building the Docker Image
       - docker build -t $IMAGE_REPO_NAME .
       - echo Build started on `date`

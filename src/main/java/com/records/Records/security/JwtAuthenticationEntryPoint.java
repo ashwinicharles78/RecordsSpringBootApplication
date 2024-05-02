@@ -18,8 +18,8 @@ import java.io.PrintWriter;
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         PrintWriter writer = response.getWriter();
-        writer.println("Access Denied !! " + authException.getMessage());
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        writer.println("Exception occurred please check logs for further details");
     }
 }

@@ -15,7 +15,13 @@ public class MyPipelineApp {
                 .region("us-east-1")
                 .build();
 
+        new VpcStack(app, "vpc", StackProps.builder()
+                .env(env).build());
+        new MSKStack(app, "msk", StackProps.builder()
+                .env(env).build());
         new MyPipelineStack(app, "dev", StackProps.builder()
+                .env(env).build());
+        new ConsumerStack(app, "consumer-dev", StackProps.builder()
                 .env(env).build());
         new MyPipelineStack(app, "test",StackProps.builder()
                 .env(env).build());

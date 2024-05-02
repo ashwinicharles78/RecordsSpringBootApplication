@@ -9,7 +9,7 @@ import com.records.Records.model.KafkaUserData;
 import com.records.Records.model.UserModel;
 import com.records.Records.service.KafkaMessagePublisherService;
 import com.records.Records.service.UserService;
-import com.records.Records.service.impl.MailConfig;
+import com.records.Records.service.impl.MailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,7 +57,7 @@ public class AuthController {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private MailConfig mail;
+    private MailService mail;
 
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final String TOPIC_NAME = "kafka.topic.name";

@@ -15,15 +15,20 @@ import com.records.Records.model.KafkaUserData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 import java.io.IOException;
 import java.util.Objects;
 
 @Service
-public class MailConfig {
+public class MailService {
 
     @Autowired
     private Environment env;
+
+    @Autowired
+    private TemplateEngine templateEngine;
 
     // Replace sender@example.com with your "From" address.
     // This address must be verified with Amazon SES.
@@ -62,26 +67,36 @@ public class MailConfig {
         );
 
         try {
+            String processedString = "";
             AmazonSimpleEmailService client =
                     AmazonSimpleEmailServiceClientBuilder.standard()
                             .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
                             // Replace US_WEST_2 with the AWS Region you're using for
                             // Amazon SES.
                             .withRegion(Regions.US_EAST_1).build();
+            if(!userData.getEmail().isEmpty()) {
+                Context context = new Context();
+            /*
+            content is the variable defined in our HTML template within the div tag
+            */
+                context.setVariable("email", userData.getEmail());
+                context.setVariable("name", userData.getFirstName()+SPACE+userData.getLastName());
+                processedString = templateEngine.process("template", context);
+            }
             SendEmailRequest request = new SendEmailRequest()
                     .withDestination(
                             new Destination().withToAddresses(TO))
                     .withMessage(new Message()
                             .withBody(new Body()
                                     .withHtml(new Content()
-                                            .withCharset("UTF-8").withData(HTMLBODY.formatted(userData.getEmail(), userData.getFirstName()+SPACE+userData.getLastName())))
+                                            .withCharset("UTF-8").withData(processedString))
                                     .withText(new Content()
                                             .withCharset("UTF-8").withData(TEXTBODY)))
                             .withSubject(new Content()
                                     .withCharset("UTF-8").withData(SUBJECT)))
                     .withSource(FROM);
-                    // Comment or remove the next line if you are not using a
-                    // configuration set
+            // Comment or remove the next line if you are not using a
+            // configuration set
 //                    .withConfigurationSetName(CONFIGSET);
             client.sendEmail(request);
             System.out.println("Email sent!");
@@ -89,5 +104,6 @@ public class MailConfig {
             System.out.println("The email was not sent. Error message: "
                     + ex.getMessage());
         }
+
     }
 }

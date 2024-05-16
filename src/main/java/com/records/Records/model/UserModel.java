@@ -15,6 +15,7 @@ public class UserModel {
     private String lastName;
     private String email;
     private String password;
+    private String phoneNumber;
     private String matchingPassword;
     private List<Roles> roles;
 }

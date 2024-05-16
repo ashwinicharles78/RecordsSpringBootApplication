@@ -45,12 +45,7 @@ public class KafkaProducerConfig {
 
     @Bean
     public ProducerFactory<String,Object> producerFactory(){
-//        Object acksConfig = producerConfig().get("acks");
-//        if (acksConfig != null) {
-//            System.out.println("acks is configured as: " + acksConfig);
-//        } else {
-//            System.out.println("acks configuration is not found.");
-//        }
+
         return new DefaultKafkaProducerFactory<>(producerConfig());
     }
 

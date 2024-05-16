@@ -27,12 +27,18 @@ public class UserServiceImpl implements UserService {
             user.setFirstName(userModel.getFirstName());
             user.setLastName(userModel.getLastName());
             user.setRoles(userModel.getRoles());
+            user.setPhoneNumber(userModel.getPhoneNumber());
             user.setPassword(passwordEncoder.encode(userModel.getPassword()));
-            user.setEnabled(true);
+//            user.setEnabled(true);
 
             userRepository.save(user);
             return user;
         }
+    }
+
+    @Override
+    public User getUserByPhone(String phoneNumber) {
+        return userRepository.findByPhoneNumber(phoneNumber);
     }
 
 }

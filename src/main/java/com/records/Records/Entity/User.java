@@ -27,7 +27,8 @@ public class User {
     @Column(length = 60)
     @NonNull
     private String password;
-
+//    @Column(unique = true)
+    private String phoneNumber;
     private List<Roles> roles;
     private boolean enabled = false;
 }
